@@ -12,6 +12,7 @@ struct Chord_TrialApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(SustainSettings())
         }
     }
 }

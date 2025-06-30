@@ -1,10 +1,12 @@
 import SwiftUI
+import Combine
 import AVFoundation
 
 class MIDIPlayer: ObservableObject {
     private var engine = AVAudioEngine()
     private var sampler = AVAudioUnitSampler()
-    private var activeNotes: Set<UInt8> = []
+    internal var activeNotes: Set<UInt8> = []
+    private var decayingNotes: Set<UInt8> = []
 
     private let velocity: UInt8 = 100
     private let decayDuration: TimeInterval = 0.5
@@ -32,6 +34,9 @@ class MIDIPlayer: ObservableObject {
     }
 
     func playNote(note: UInt8) {
+        if decayingNotes.contains(note) {
+            decayingNotes.remove(note)
+        }
         if !activeNotes.contains(note) {
             sampler.startNote(note, withVelocity: velocity, onChannel: 0)
             activeNotes.insert(note)
@@ -41,6 +46,7 @@ class MIDIPlayer: ObservableObject {
     func stopNote(note: UInt8) {
         sampler.stopNote(note, onChannel: 0)
         activeNotes.remove(note)
+        decayingNotes.remove(note)
     }
 
     func stopAllNotes() {
@@ -48,13 +54,47 @@ class MIDIPlayer: ObservableObject {
             sampler.stopNote(note, onChannel: 0)
         }
         activeNotes.removeAll()
+        decayingNotes.removeAll()
     }
+    
+    func decayNote(_ note: UInt8) {
+        guard activeNotes.contains(note) else { return }
+        decayingNotes.insert(note)
+
+        let steps = 20
+        let interval = decayDuration / Double(steps)
+        var currentStep = 0
+
+        Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] timer in
+            guard let self = self else {
+                timer.invalidate()
+                return
+            }
+
+            if !self.decayingNotes.contains(note) {
+                timer.invalidate()
+                return
+            }
+
+            currentStep += 1
+
+            if currentStep >= steps {
+                self.stopNote(note: note)
+                timer.invalidate()
+            }
+        }
+    }
+}
+
+class SustainSettings: ObservableObject {
+    @Published var isDecayOn: Bool = false
 }
 
 struct ContentView: View {
     @StateObject private var midiPlayer = MIDIPlayer()
     @State private var selectedProgram: Int = 18
     @State private var showInstrumentPicker = false
+    @EnvironmentObject var sustainSettings: SustainSettings
 
     let chordTypes = ["", "7", "m", "aug", "dim"]
     let tonicOrder = ["Eb", "Bb", "F", "C", "G", "D", "A", "E", "B", "F#", "Db", "Ab"]
@@ -112,6 +152,21 @@ struct ContentView: View {
 
             VStack(spacing: 0) {
                 HStack {
+                    Button(action: {
+                        sustainSettings.isDecayOn.toggle()
+                    }) {
+                        Text("Decay")
+                            .padding(6)
+                            .background(sustainSettings.isDecayOn ? Color.yellow : Color.gray)
+                            .cornerRadius(6)
+                            .foregroundColor(.black)
+                            .font(.caption)
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal)
+
+                HStack {
                     Spacer()
                     Button(action: {
                         showInstrumentPicker.toggle()
@@ -148,7 +203,7 @@ struct ContentView: View {
                     }
 
                     // Empty row for spacing
-                    ForEach(0..<tonicOrder.count) { _ in
+                    ForEach(Array(0..<tonicOrder.count), id: \.self) { _ in
                         Color.clear.frame(height: buttonHeight * 0.5)
                     }
 
@@ -187,8 +242,16 @@ struct ContentView: View {
                 .sequenced(before: DragGesture(minimumDistance: 0))
                 .onEnded { _ in
                     if let notes = chordDict[label] {
+                        midiPlayer.stopAllNotes()
                         for note in notes {
-                            midiPlayer.stopNote(note: note)
+                            midiPlayer.playNote(note: note)
+                        }
+                        for note in notes {
+                            if sustainSettings.isDecayOn {
+                                midiPlayer.decayNote(note)
+                            } else {
+                                midiPlayer.stopNote(note: note)
+                            }
                         }
                     }
                 }
@@ -214,10 +277,20 @@ struct ContentView: View {
                 .sequenced(before: DragGesture(minimumDistance: 0))
                 .onEnded { _ in
                     if let note = bassNotes[label] {
-                        midiPlayer.stopNote(note: note)
+                        // Stop other bass notes immediately
+                        for active in midiPlayer.activeNotes {
+                            if active != note && bassNotes.values.contains(active) {
+                                midiPlayer.stopNote(note: active)
+                            }
+                        }
+
+                        if sustainSettings.isDecayOn {
+                            midiPlayer.decayNote(note)
+                        } else {
+                            midiPlayer.stopNote(note: note)
+                        }
                     }
                 }
         )
     }
 }
-
