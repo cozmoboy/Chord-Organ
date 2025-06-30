@@ -1,1 +1,30 @@
+# macOS system files
 .DS_Store
+
+# Xcode project files
+*.xcuserstate
+*.xcscmblueprint
+*.xcworkspace/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# Swift Package Manager
+.build/
+Packages/
+.swiftpm/
+
+# Derived data
+DerivedData/
+
+# IDE helpers
+.idea/
+*.swp
+
+# Logs and miscellaneous
+*.log
+
+# SoundFonts
+*.sf2
+
+# Other temporary files
+*.lock

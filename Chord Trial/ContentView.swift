@@ -86,6 +86,13 @@ class MIDIPlayer: ObservableObject {
             }
         }
     }
+    
+    func stopDecayingNotes() {
+        for note in decayingNotes {
+            sampler.stopNote(note, onChannel: 0)
+        }
+        decayingNotes.removeAll()
+    }
 }
 
 class SustainSettings: ObservableObject {
@@ -232,22 +239,19 @@ struct ContentView: View {
                 .cornerRadius(6)
                 .font(.system(size: 12))
         }
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0)
-                .onEnded { _ in
+        .highPriorityGesture(
+            DragGesture(minimumDistance: 0)
+                .onChanged { _ in
                     if let notes = chordDict[label] {
+                        midiPlayer.stopAllNotes()
+                        midiPlayer.stopDecayingNotes()
                         for note in notes {
                             midiPlayer.playNote(note: note)
                         }
                     }
                 }
-                .sequenced(before: DragGesture(minimumDistance: 0))
                 .onEnded { _ in
                     if let notes = chordDict[label] {
-                        midiPlayer.stopAllNotes()
-                        for note in notes {
-                            midiPlayer.playNote(note: note)
-                        }
                         for note in notes {
                             if sustainSettings.isDecayOn {
                                 midiPlayer.decayNote(note)
