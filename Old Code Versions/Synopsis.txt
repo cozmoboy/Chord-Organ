@@ -1,0 +1,23 @@
+Chord Trial – App Synopsis
+Overview:
+Chord Trial is a SwiftUI-based iOS app designed for musicians, composers, and hobbyists to experiment with and play musical chords using realistic General MIDI instrument sounds. It provides an intuitive interface for selecting instruments and triggering chords with simple touch gestures.
+
+Key Features:
+
+Dynamic Instrument Selection:
+A dropdown menu lets users choose from 80 General MIDI instruments (e.g., piano, organ, guitar, strings, brass, woodwinds). The selected instrument changes in real-time, altering the sound of all played chords.
+
+Chord Playback Grid:
+Users can play major, minor, and dominant seventh chords for each of the seven natural notes (C, D, E, F, G, A, B). Chords are triggered by long-pressing labeled buttons arranged in rows.
+
+Realistic SoundFont Playback:
+Audio is rendered using Apple’s AVAudioUnitSampler and a high-quality .sf2 SoundFont (e.g., GeneralUser-GS.sf2), giving lifelike instrument timbres.
+
+Touch Interaction with Decay:
+Chords begin playing on touch and automatically stop after a short decay (0.5 seconds) unless interrupted, allowing natural-sounding performance-style input.
+
+Modern SwiftUI Interface:
+Built with a clean, touch-friendly layout using SwiftUI, optimized for iPhone and iPad.
+
+Intended Use:
+Ideal for music students practicing ear training, songwriters auditioning chord voicings with different instruments, and anyone exploring harmony and orchestration on the go.

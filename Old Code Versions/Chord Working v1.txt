@@ -1,0 +1,149 @@
+import SwiftUI
+import AVFoundation
+
+class MIDIPlayer: ObservableObject {
+    private var engine = AVAudioEngine()
+    private var sampler = AVAudioUnitSampler()
+    private var currentNotes: [UInt8] = []
+    private var decayTask: DispatchWorkItem?
+
+    private let velocity: UInt8 = 100
+    private let decayDuration: TimeInterval = 0.5
+
+    init() {
+        engine.attach(sampler)
+        engine.connect(sampler, to: engine.mainMixerNode, format: nil)
+        try? engine.start()
+
+        if let bankURL = Bundle.main.url(forResource: "GeneralUser-GS", withExtension: "sf2") {
+            try? sampler.loadSoundBankInstrument(
+                at: bankURL,
+                program: 18, // Initial instrument (Rock Organ)
+                bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB),
+                bankLSB: 0
+            )
+        }
+    }
+
+    func setInstrument(program: UInt8) {
+        sampler.sendProgramChange(program, bankMSB: UInt8(kAUSampler_DefaultMelodicBankMSB), bankLSB: 0, onChannel: 0)
+    }
+
+    func playChord(notes: [UInt8]) {
+        stopChord()
+        currentNotes = notes
+        for note in notes {
+            sampler.startNote(note, withVelocity: velocity, onChannel: 0)
+        }
+    }
+
+    func releaseChord() {
+        decayTask?.cancel()
+        let task = DispatchWorkItem {
+            for note in self.currentNotes {
+                self.sampler.stopNote(note, onChannel: 0)
+            }
+            self.currentNotes = []
+        }
+        decayTask = task
+        DispatchQueue.main.asyncAfter(deadline: .now() + decayDuration, execute: task)
+    }
+
+    private func stopChord() {
+        for note in currentNotes {
+            sampler.stopNote(note, onChannel: 0)
+        }
+        currentNotes = []
+        decayTask?.cancel()
+    }
+}
+
+struct ContentView: View {
+    @StateObject var midiPlayer = MIDIPlayer()
+    @State private var selectedProgram: Int = 18
+
+    let chordDict: [String: [UInt8]] = [
+        "C":   [36, 48, 52, 55], "Cm":  [36, 48, 51, 55], "C7":  [36, 48, 52, 55, 58],
+        "D":   [38, 50, 54, 57], "Dm":  [38, 50, 53, 57], "D7":  [38, 50, 54, 57, 60],
+        "E":   [40, 52, 56, 59], "Em":  [40, 52, 55, 59], "E7":  [40, 52, 56, 59, 62],
+        "F":   [41, 53, 57, 60], "Fm":  [41, 53, 56, 60], "F7":  [41, 53, 57, 60, 63],
+        "G":   [43, 55, 59, 62], "Gm":  [43, 55, 58, 62], "G7":  [43, 55, 59, 62, 65],
+        "A":   [45, 57, 61, 64], "Am":  [45, 57, 60, 64], "A7":  [45, 57, 61, 64, 67],
+        "B":   [47, 59, 63, 66], "Bm":  [47, 59, 62, 66], "B7":  [47, 59, 63, 66, 69]
+    ]
+
+    let majorKeys = ["C", "D", "E", "F", "G", "A", "B"]
+
+    var body: some View {
+        VStack(spacing: 20) {
+            Picker("Instrument", selection: $selectedProgram) {
+                ForEach(0..<instrumentNames.count, id: \.self) { i in
+                    Text("\(i): \(instrumentNames[i])").tag(i)
+                }
+            }
+            .pickerStyle(MenuPickerStyle())
+            .onChange(of: selectedProgram) { newValue in
+                midiPlayer.setInstrument(program: UInt8(newValue))
+            }
+
+            Text("Play Chords")
+                .font(.largeTitle)
+
+            ForEach(majorKeys, id: \.self) { key in
+                HStack(spacing: 20) {
+                    chordButton(label: "\(key)m")
+                    chordButton(label: key)
+                    chordButton(label: "\(key)7")
+                }
+            }
+        }
+        .padding()
+    }
+
+    func chordButton(label: String) -> some View {
+        Button(action: {}) {
+            Text(label)
+                .frame(width: 80, height: 40)
+                .background(Color.blue)
+                .foregroundColor(.white)
+                .cornerRadius(8)
+        }
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0)
+                .onEnded { _ in
+                    if let notes = chordDict[label] {
+                        midiPlayer.playChord(notes: notes)
+                    }
+                }
+                .sequenced(before: DragGesture(minimumDistance: 0))
+                .onEnded { _ in
+                    midiPlayer.releaseChord()
+                }
+        )
+    }
+
+    var instrumentNames: [String] {
+        [
+            "Acoustic Grand Piano", "Bright Acoustic Piano", "Electric Grand Piano", "Honky-tonk Piano",
+            "Electric Piano 1", "Electric Piano 2", "Harpsichord", "Clavinet",
+            "Celesta", "Glockenspiel", "Music Box", "Vibraphone",
+            "Marimba", "Xylophone", "Tubular Bells", "Dulcimer",
+            "Drawbar Organ", "Percussive Organ", "Rock Organ", "Church Organ",
+            "Reed Organ", "Accordion", "Harmonica", "Tango Accordion",
+            "Acoustic Guitar (nylon)", "Acoustic Guitar (steel)", "Electric Guitar (jazz)", "Electric Guitar (clean)",
+            "Electric Guitar (muted)", "Overdriven Guitar", "Distortion Guitar", "Guitar Harmonics",
+            "Acoustic Bass", "Electric Bass (finger)", "Electric Bass (pick)", "Fretless Bass",
+            "Slap Bass 1", "Slap Bass 2", "Synth Bass 1", "Synth Bass 2",
+            "Violin", "Viola", "Cello", "Contrabass",
+            "Tremolo Strings", "Pizzicato Strings", "Orchestral Harp", "Timpani",
+            "String Ensemble 1", "String Ensemble 2", "Synth Strings 1", "Synth Strings 2",
+            "Choir Aahs", "Voice Oohs", "Synth Voice", "Orchestra Hit",
+            "Trumpet", "Trombone", "Tuba", "Muted Trumpet",
+            "French Horn", "Brass Section", "Synth Brass 1", "Synth Brass 2",
+            "Soprano Sax", "Alto Sax", "Tenor Sax", "Baritone Sax",
+            "Oboe", "English Horn", "Bassoon", "Clarinet",
+            "Piccolo", "Flute", "Recorder", "Pan Flute"
+        ]
+    }
+}
+
